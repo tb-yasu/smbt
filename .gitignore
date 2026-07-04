@@ -1,0 +1,25 @@
+# Build artifacts
+*.o
+*.so
+*~
+
+# CLI binaries (produced by `make`, moved into prog/)
+/prog/smbt-build
+/prog/smbt-search
+
+# Python / packaging
+build/
+dist/
+wheelhouse/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+python/smbt/*.so
+
+# Index files (produced at runtime)
+*.bin
+
+# Backup of the vendored rsdic .git (kept out of tree; see LICENSE for provenance)
+src/rsdic/.git

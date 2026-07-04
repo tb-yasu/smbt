@@ -1,0 +1,643 @@
+/*
+ * succinct_multibit_tree_trie.cpp
+ * Copyright (c) 2013 Yasuo Tabei All Rights Reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE and * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include "succinct_multibit_tree_trie.hpp"
+
+using namespace std;
+
+namespace smbt {
+namespace trie{
+
+void SuccinctMultibitTreeTRIE::read_file(ifstream &ifs, vector<pair<uint32_t, vector<uint32_t> >* > &fvs) {
+  string   line;
+  uint32_t item;
+  uint32_t id = 0;
+  while (getline(ifs, line)) {
+    vector<uint32_t> fv;
+    stringstream ss(line);
+    while (ss >> item)
+      fv.push_back(item);
+    if (fv.empty())
+      continue;
+    sort(fv.begin(), fv.end());
+    fv.erase(std::unique(fv.begin(), fv.end()), fv.end());
+    fvs.resize(fvs.size() + 1);
+    fvs[fvs.size() - 1] = new pair<uint32_t, vector<uint32_t> >;
+    fvs[fvs.size() - 1]->first = id++;
+    fvs[fvs.size() - 1]->second.swap(fv);
+  }
+}
+
+void SuccinctMultibitTreeTRIE::build_range_multibit_tree(uint64_t num_one, uint64_t start, uint64_t end) {
+  vector<uint32_t> ids;
+  for (uint64_t id = start; id <= end; ++id)
+    ids.push_back(id);
+
+  set<uint32_t> items;
+  for (size_t i = 0; i < ids.size(); ++i) {
+    vector<uint32_t> &fv = fvs_[ids[i]]->second;
+    for (size_t j = 0; j < fv.size(); ++j)
+      items.insert(fv[j]);
+  }
+
+  vector<Component*> components;
+  build_multibit_tree_recursive(0, ids, items, components);
+  stable_sort(components.begin(), components.end(), DepthLess());
+  trees_.resize(trees_.size() + 1);
+  trees_[trees_.size() - 1].cardinality = num_one;
+  trees_[trees_.size() - 1].build(components);
+
+  for (size_t i = 0; i < components.size(); ++i)
+    delete components[i];
+}
+
+void SuccinctMultibitTreeTRIE::build_multibit_tree() {
+  sort(fvs_.begin(), fvs_.end(), CardinalityLess());
+
+  uint64_t start = 0;
+  uint64_t bef_num = fvs_[0]->second.size();
+  for (size_t i = 1; i < fvs_.size(); ++i) {
+    uint64_t cur_num = fvs_[i]->second.size();
+    if (bef_num != cur_num) {
+      build_range_multibit_tree(bef_num, start, i - 1);
+      start = i;
+      bef_num = cur_num;
+    }
+  }
+  build_range_multibit_tree(bef_num, start, fvs_.size() - 1);
+}
+
+float SuccinctMultibitTreeTRIE::calc_entropy(uint32_t num_one, uint32_t num_zero) {
+  uint32_t num_all = num_one + num_zero;
+  float ent = 0.f;
+  if (num_one != 0)
+    ent += -((float(num_one)/float(num_all)) * log(float(num_one)/float(num_all)));
+  if (num_zero != 0)
+    ent += -((float(num_zero)/float(num_all)) * log(float(num_zero)/float(num_all)));
+
+  return ent / log(2.0f);
+}
+
+void SuccinctMultibitTreeTRIE::calc_split_item(vector<uint32_t> &ids, set<uint32_t> &items, uint32_t &item, const vector<uint32_t> &count_one) {
+  float max_ent = 0;
+  item = 0;
+  for (set<uint32_t>::iterator it = items.begin(); it != items.end(); ++it) {
+    uint32_t num_one, num_zero;
+    if (count_one.size() <= *it) {
+      num_one = 0; num_zero = ids.size();
+    }
+    else {
+      num_one = count_one[*it]; num_zero = ids.size() - num_one;
+    }
+    float current_ent = calc_entropy(num_one, num_zero);
+    if (max_ent < current_ent) {
+      max_ent = current_ent;
+      item = *it;
+    }
+    if (max_ent >= 0.95)
+      break;
+  }
+
+  if (max_ent < 0.001)
+    item = UINT_MAX;
+}
+
+void SuccinctMultibitTreeTRIE::calc_dominant_items(set<uint32_t> &items, vector<uint32_t> &ids, vector<uint32_t> &one_cols, vector<uint32_t> &zero_cols, vector<uint32_t> &delete_items, const vector<uint32_t> &count_one) {
+  for (set<uint32_t>::iterator it = items.begin(); it != items.end(); ++it) {
+    uint32_t citem = *it;
+    if      (count_one.size() <= citem) {
+      zero_cols.push_back(citem);
+      delete_items.push_back(citem);
+    }
+    else if (count_one[citem] == ids.size()) {
+      one_cols.push_back(citem);
+      delete_items.push_back(citem);
+    }
+    else if (count_one[citem] == 0) {
+      zero_cols.push_back(citem);
+      delete_items.push_back(citem);
+    }
+  }
+}
+
+void SuccinctMultibitTreeTRIE::split_data(uint32_t item, vector<uint32_t> &ids, vector<uint32_t> &one_ids, vector<uint32_t> &zero_ids) {
+  for (size_t i = 0; i < ids.size(); ++i)  {
+    vector<uint32_t> &fv = fvs_[ids[i]]->second;
+    if (binary_search(fv.begin(), fv.end(), item))
+      one_ids.push_back(ids[i]);
+    else
+      zero_ids.push_back(ids[i]);
+  }
+}
+
+void SuccinctMultibitTreeTRIE::build_multibit_tree_recursive(uint32_t depth, vector<uint32_t> &ids, set<uint32_t> items, vector<Component*> &components) {
+  components.resize(components.size() + 1);
+  components[components.size() - 1] = new Component;
+  components[components.size() - 1]->depth = depth;
+  vector<uint32_t> &cids = components[components.size() - 1]->ids;
+  components[components.size() - 1]->leaf = false;
+
+  vector<uint32_t> count_one;
+  for (size_t i = 0; i < ids.size(); ++i) {
+    vector<uint32_t> &fv = fvs_[ids[i]]->second;
+    for (size_t j = 0; j < fv.size(); ++j) {
+      if (count_one.size() <= fv[j])
+	count_one.resize(fv[j] + 1);
+      ++count_one[fv[j]];
+    }
+  }
+
+  uint32_t item;
+  calc_split_item(ids, items, item, count_one);
+  items.erase(item);
+
+  if (item == UINT_MAX) {
+    components[components.size() - 1]->leaf = true;
+    cids.resize(ids.size());
+    for (size_t i = 0; i < ids.size(); ++i)
+      cids[i] = fvs_[ids[i]]->first;
+    sort(cids.begin(), cids.end());
+    return;
+  }
+
+  vector<uint32_t> &one_cols  = components[components.size() - 1]->one_cols;
+  vector<uint32_t> &zero_cols = components[components.size() - 1]->zero_cols;
+  vector<uint32_t> delete_items;
+  calc_dominant_items(items, ids, one_cols, zero_cols, delete_items, count_one);
+  for (size_t i = 0; i < delete_items.size(); ++i)
+    items.erase(delete_items[i]);
+  delete_items.clear();
+
+  if (items.size() == 0 || ids.size() <= minsup_) {
+    components[components.size() - 1]->leaf = true;
+    cids.resize(ids.size());
+    for (size_t i = 0; i < ids.size(); ++i)
+      cids[i] = fvs_[ids[i]]->first;
+    sort(cids.begin(), cids.end());
+    return;
+  }
+
+  vector<uint32_t> one_ids, zero_ids;
+  split_data(item, ids, one_ids, zero_ids);
+  build_multibit_tree_recursive(depth + 1, one_ids, items, components);
+  build_multibit_tree_recursive(depth + 1, zero_ids, items, components);
+}
+
+void SuccinctMultibitTreeTRIE::save(ostream &os) {
+  {
+    size_t size = trees_.size();
+    os.write((const char*)(&size), sizeof(size_t));
+    for (size_t i = 0; i < size; ++i)
+      trees_[i].save(os);
+  }
+  {
+    size_t size = remains_.size();
+    os.write((const char*)(&size), sizeof(size_t));
+    for (size_t i = 0; i < size; ++i) {
+      remains_[i].save(os);
+    }
+  }
+
+  vb_loud_.Save(os);
+  items_.save(os);
+  idconverter_.save(os);
+
+  {
+    size_t size = clusters_.size();
+    os.write((const char*)(&size), sizeof(size));
+    for (size_t i = 0; i < size; ++i) {
+      vector<uint32_t> &cluster = clusters_[i];
+      size_t size2 = cluster.size();
+      os.write((const char*)(&size2), sizeof(size2));
+      os.write((const char*)(&cluster[0]), sizeof(uint32_t)*size2);
+    }
+  }
+}
+
+void SuccinctMultibitTreeTRIE::load(istream &is) {
+  {
+    size_t size;
+    checked_read(is, (char*)(&size), sizeof(size_t));
+    trees_.resize(size);
+    for (size_t i = 0; i < size; ++i)
+      trees_[i].load(is);
+  }
+  {
+    size_t size;
+    checked_read(is, (char*)(&size), sizeof(size_t));
+    remains_.resize(size);
+    for (size_t i = 0; i < size; ++i)
+      remains_[i].load(is);
+  }
+
+  vb_loud_.Load(is);
+  items_.load(is);
+  idconverter_.load(is);
+
+  {
+    size_t size;
+    checked_read(is, (char*)(&size), sizeof(size));
+    clusters_.resize(size);
+    for (size_t i = 0; i < size; ++i) {
+      vector<uint32_t> &cluster = clusters_[i];
+      size_t size2;
+      checked_read(is, (char*)(&size2), sizeof(size2));
+      cluster.resize(size2);
+      checked_read(is, (char*)(&cluster[0]), sizeof(uint32_t)*size2);
+    }
+  }
+}
+
+void SuccinctMultibitTreeTRIE::unique() {
+  if (fvs_.size() <= 1)
+    return;
+  size_t size = fvs_.size();
+  size_t bef = 0;
+  std::vector<std::pair<uint32_t, std::vector<uint32_t> >* > newfvs;
+  newfvs.push_back(fvs_[0]);
+  for (size_t i = 1; i < size; ++i) {
+    if (fvs_[bef]->second != fvs_[i]->second) {
+      size_t id = fvs_[bef]->first;
+      if (clusters_.size() <= id)
+	clusters_.resize(id+1);
+      for (size_t j = bef; j < i; ++j)
+	clusters_[id].push_back(fvs_[j]->first);
+      newfvs.push_back(fvs_[bef]);
+      bef = i;
+    }
+  }
+  size_t id = fvs_[bef]->first;
+  if (clusters_.size() <= id)
+    clusters_.resize(id+1);
+  for (size_t j = bef; j < size; ++j)
+    clusters_[id].push_back(fvs_[j]->first);
+  newfvs.push_back(fvs_[bef]);
+
+  fvs_ = newfvs;
+}
+
+void SuccinctMultibitTreeTRIE::build_trie() {
+  sort(fvs_.begin(), fvs_.end(), LexLess());
+  unique();
+
+  rsdic::RSDicBuilder vb_louddb;
+  vector<uint32_t> tmpidconverter;
+  tmpidconverter.resize(fvs_.size());
+  uint64_t pos_vb = 0;
+  vb_louddb.PushBack(1); pos_vb++;
+  vb_louddb.PushBack(0); pos_vb++;
+
+  queue<QueueElem> q;
+  q.push(QueueElem(0, fvs_.size(), 0));
+
+  vector<uint32_t> titems;
+  while (!q.empty()) {
+    QueueElem &elem = q.front();
+    const uint32_t depth = elem.depth;
+    const uint32_t left  = elem.left;
+    const uint32_t right = elem.right;
+    q.pop();
+
+    if (left+1 == right) {
+      if (tmpidconverter.size() <= fvs_[left]->first)
+	tmpidconverter.resize(fvs_[left]->first+1);
+      tmpidconverter[fvs_[left]->first] = pos_vb;
+
+      if (remains_.size() <= fvs_[left]->first)
+	remains_.resize(fvs_[left]->first+1);
+
+      smbt::SucArray &remain = remains_[fvs_[left]->first];
+      vector<uint32_t> &fv = fvs_[left]->second;
+
+      uint32_t bef = 0;
+      if (depth > 0)
+	bef = fv[depth-1];
+      for (size_t d = depth; d < fv.size(); ++d) {
+	remain.push(fv[d]-bef);
+	bef = fv[d];
+      }
+
+      vb_louddb.PushBack(0); pos_vb++;
+      continue;
+    }
+
+    size_t new_left = left;
+    if (fvs_[left]->second.size() == depth) {
+      while (new_left < right && fvs_[new_left]->second.size() == depth)
+	new_left++;
+      for (size_t j = left; j < new_left; ++j) {
+	if (tmpidconverter.size() <= fvs_[j]->first)
+	  tmpidconverter.resize(fvs_[j]->first + 1);
+	tmpidconverter[fvs_[j]->first] = pos_vb;
+      }
+      if (new_left == right) {
+	vb_louddb.PushBack(0); pos_vb++;
+	continue;
+      }
+    }
+
+    uint32_t prev = new_left;
+    uint32_t prev_c = fvs_[prev]->second[depth];
+    for (size_t i = new_left+1; i < right; ++i) {
+      if (prev_c != fvs_[i]->second[depth]) {
+	titems.push_back(prev_c);
+	vb_louddb.PushBack(1); pos_vb++;
+	q.push(QueueElem(prev, i, depth+1));
+	prev = i;
+	prev_c = fvs_[prev]->second[depth];
+      }
+    }
+
+    if (prev != right) {
+      titems.push_back(prev_c);
+      vb_louddb.PushBack(1); pos_vb++;
+      q.push(QueueElem(prev,right,depth+1));
+    }
+    vb_louddb.PushBack(0); pos_vb++;
+  }
+
+  vb_louddb.Build(vb_loud_);
+
+  compress_items(titems);
+
+  for (size_t i = 0; i < tmpidconverter.size(); ++i)
+    idconverter_.push(tmpidconverter[i]);
+  idconverter_.build();
+
+  for (size_t i = 0; i < remains_.size(); ++i)
+    remains_[i].build();
+}
+
+void SuccinctMultibitTreeTRIE::compress_items(vector<uint32_t> &titems) {
+  size_t cur = 2;
+  stack<pair<uint32_t, uint32_t> > stk;
+  stk.push(make_pair(cur, 0));
+
+  while (!stk.empty()) {
+    size_t cur = stk.top().first;
+    size_t pv  = stk.top().second;
+    stk.pop();
+    if (trie_leaf(cur)) {
+      continue;
+    }
+
+    vector<uint32_t> tvals;
+    for (size_t tcur = cur; vb_loud_.GetBit(tcur) != 0; tcur++) {
+      size_t   pos = vb_loud_.Rank(tcur+1, 1) - 2;
+      uint32_t tval = titems[pos];
+      titems[pos] -= pv;
+      size_t newcur = trie_first_child(tcur);
+      stk.push(make_pair(newcur, tval));
+    }
+  }
+  for (size_t i = 0; i < titems.size(); ++i) {
+    items_.push(titems[i]);
+  }
+  items_.build();
+}
+
+void SuccinctMultibitTreeTRIE::build(const char *fname, size_t minsup) {
+  minsup_ = minsup;
+  {
+    ifstream ifs(fname);
+    if (!ifs) {
+      cerr << "cannot open: " << fname << endl;
+      exit(1);
+    }
+    read_file(ifs, fvs_);
+    ifs.close();
+  }
+  if (fvs_.empty()) {
+    cerr << "error: no fingerprints read from " << fname << " (empty or all-blank input)" << endl;
+    exit(1);
+  }
+
+  cerr << "building multibit tree" << endl;
+  double bstime = clock();
+  build_multibit_tree();
+  double betime = clock();
+
+  cerr << "building trie"  << endl;
+  double tstime = clock();
+  build_trie();
+  double tetime = clock();
+
+  double btime = (betime - bstime)/CLOCKS_PER_SEC;
+  double ttime = (tetime - tstime)/CLOCKS_PER_SEC;
+  cout << "building time of multibittree (sec):" << btime << endl;
+  cout << "building time of trie (sec):" << ttime << endl;
+  cout << "total building time (sec):" << (btime + ttime) << endl;
+  cout << "succinct multibit tree size (byte):" << size_in_bytes() << endl;
+  cout << "trie size (byte):" << trie_size_in_bytes() << endl;
+}
+
+void SuccinctMultibitTreeTRIE::calc_column_info(Tree &tree, uint64_t cur, const vector<uint32_t> &qfv, uint32_t &one_col_num, uint32_t &zero_col_num) {
+  uint64_t r = tree.internal_rank(cur);
+
+  vector<uint32_t> one_col;
+  tree.one_cols[r].decode(one_col);
+  for (size_t i = 0; i < one_col.size(); ++i) {
+    if (binary_search(qfv.begin(), qfv.end(), one_col[i]) == false)
+      ++one_col_num;
+  }
+
+  vector<uint32_t> zero_col;
+  tree.zero_cols[r].decode(zero_col);
+  for (size_t i = 0; i < zero_col.size(); ++i) {
+    if (binary_search(qfv.begin(), qfv.end(), zero_col[i]) == true)
+      ++zero_col_num;
+  }
+}
+
+bool SuccinctMultibitTreeTRIE::pruning(Tree &tree, const vector<uint32_t> &qfv, float similarity, uint32_t one_col_num, uint32_t zero_col_num) {
+  uint64_t card_a = tree.cardinality;
+  uint64_t card_b = qfv.size();
+  uint64_t common = std::min(card_a - one_col_num, card_b - zero_col_num);
+  return (float(common)/float(card_a + card_b - common) < similarity);
+}
+
+float SuccinctMultibitTreeTRIE::jaccard_sim(uint32_t id, const vector<uint32_t> &qfv) {
+  uint64_t  pos   = idconverter_.get(id);
+  vector<uint32_t> oitems;
+
+  smbt::SucArray &remain = remains_[id];
+  for (int i = remain.get_size() - 1; i >= 0; --i)
+    oitems.push_back(remain.get(i));
+
+  pos = trie_parent(pos);
+  uint32_t item = trie_item(pos);
+  oitems.push_back(item);
+  while (pos >= 2) {
+    pos  = trie_parent(pos);
+    if (pos < 2)
+      break;
+    item = trie_item(pos);
+    oitems.push_back(item);
+  }
+
+  uint64_t common = 0;
+  uint64_t all    = 0;
+  int      qpos   = 0;
+  int      opos   = oitems.size() - 1;
+  uint32_t val = oitems[opos];
+  while (qpos < (int)qfv.size() && opos >= 0) {
+    if     (qfv[qpos] < val) {
+      all++; qpos++;
+    }
+    else if(qfv[qpos] > val) {
+      all++; opos--;
+      if (opos >= 0)
+	val += oitems[opos];
+    }
+    else {
+      common++; all++;
+      qpos++; opos--;
+      if (opos >= 0)
+	val += oitems[opos];
+    }
+  }
+  all += (qfv.size() - qpos);
+  all += (opos + 1);
+
+  return float(common)/float(all);
+}
+
+inline bool SuccinctMultibitTreeTRIE::trie_leaf(uint64_t pos) {
+  return vb_loud_.GetBit(pos) == 0;
+}
+
+inline uint64_t SuccinctMultibitTreeTRIE::trie_parent(uint64_t pos) {
+  return vb_loud_.Select(vb_loud_.Rank(pos,0)-1, 1);
+}
+
+inline uint64_t SuccinctMultibitTreeTRIE::trie_first_child(uint64_t pos) {
+  return vb_loud_.Select(vb_loud_.Rank(pos+1,1)-1, 0) + 1;
+}
+
+inline uint32_t SuccinctMultibitTreeTRIE::trie_item(uint64_t pos) {
+  return items_.get(vb_loud_.Rank(pos+1, 1) - 2);
+}
+
+void SuccinctMultibitTreeTRIE::calc_similarity(Tree &tree, uint64_t cur, const vector<uint32_t> &qfv, float similarity, vector<pair<float, uint32_t> > &res) {
+  vector<uint32_t> ids;
+  tree.get_ids(cur, ids);
+
+  for (size_t id = 0; id < ids.size(); ++id)  {
+    if (clusters_.size() <= ids[id])
+      continue;
+
+    vector<uint32_t> &cluster = clusters_[ids[id]];
+    if (cluster.empty())
+      continue;
+
+    // Every member of a cluster shares the identical fingerprint (that's
+    // why they were merged by unique()), so the similarity is the same
+    // for all of them: compute it once instead of per member.
+    float sim = jaccard_sim(cluster[0], qfv);
+    if (sim >= similarity) {
+      for (size_t j = 0; j < cluster.size(); ++j)
+	res.push_back(make_pair(sim, cluster[j]));
+    }
+  }
+}
+
+void SuccinctMultibitTreeTRIE::search_query_recursive(Tree &tree, uint64_t cur, const vector<uint32_t> &qfv, float similarity, uint32_t one_col_num, uint32_t zero_col_num, vector<pair<float,  uint32_t> > &res) {
+  if (tree.leaf(cur)) {
+    calc_similarity(tree, cur, qfv, similarity, res);
+    return;
+  }
+
+  calc_column_info(tree, cur, qfv, one_col_num, zero_col_num);
+  if (pruning(tree, qfv, similarity, one_col_num, zero_col_num)) {
+    return;
+  }
+
+  search_query_recursive(tree, tree.get_first_child(cur), qfv, similarity, one_col_num, zero_col_num, res);
+  search_query_recursive(tree, tree.get_first_child(cur+1), qfv, similarity, one_col_num, zero_col_num, res);
+}
+
+void SuccinctMultibitTreeTRIE::search_query(const vector<uint32_t> &qfv, float similarity, vector<pair<float,  uint32_t> > &res) {
+  uint64_t query_one_num = qfv.size();
+  for (size_t i = 0; i < trees_.size(); ++i) {
+    uint32_t cardinality = trees_[i].cardinality;
+    if (similarity * float(cardinality) <= float(query_one_num) && float(query_one_num) <= float(cardinality) / similarity)  {
+      search_query_recursive(trees_[i], 2, qfv, similarity, 0, 0, res);
+    }
+    if (similarity * float(cardinality) > float(query_one_num))
+      break;
+
+  }
+}
+
+void SuccinctMultibitTreeTRIE::search(const char *qname, float sim) {
+  cerr << "loading query file:" << qname << endl;
+  vector<pair<uint32_t, vector<uint32_t> >* > qfvs;
+  {
+    ifstream ifs(qname);
+    if (!ifs) {
+      cerr << "cannot open: " << qname << endl;
+      exit(1);
+    }
+    read_file(ifs, qfvs);
+    ifs.close();
+  }
+
+  uint64_t total_num = 0;
+  vector<double> times;
+  for (size_t i = 0; i < qfvs.size(); ++i) {
+    uint32_t qid          = qfvs[i]->first;
+    vector<uint32_t> &qfv = qfvs[i]->second;
+    vector<pair<float,  uint32_t> > res;
+    double stime = clock();
+    search_query(qfv, sim, res);
+    double etime = clock();
+    times.push_back((etime - stime)/CLOCKS_PER_SEC);
+    total_num += res.size();
+    cout << "query id:" << qid << " num:" << res.size() << " ";
+    for (size_t j = 0; j < res.size(); ++j) {
+      cout << res[j].second << ":" << res[j].first << " ";
+    }
+    cout << endl;
+  }
+  size_t size = times.size();
+  double mean = 0.0;
+  if (size > 0) {
+    for (size_t i = 0; i < size; ++i)
+      mean += times[i];
+    mean /= size;
+  }
+
+  double var = 0.0;
+  if (size > 1) {
+    for (size_t i = 0; i < size; ++i)
+      var += (times[i] - mean) * (times[i] - mean);
+    var /= (size - 1);
+  }
+  double stddev = sqrt(var);
+
+  cout << "average answers:" << (size > 0 ? double(total_num)/double(size) : 0.0) << endl;
+  cout << "average cpu time (sec):" << mean << endl;
+  cout << "std dev:" << stddev << endl;
+}
+}
+}

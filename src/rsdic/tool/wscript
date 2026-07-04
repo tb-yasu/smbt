@@ -1,0 +1,23 @@
+def options(ctx):
+  pass
+    
+def configure(ctx):
+  pass
+
+def build(bld):
+  bld.program(
+       source       = 'PerformanceTest.cpp',
+       target       = 'PerformanceTest',
+       use          = 'RSDIC',
+       includes     = '.')
+  bld.program(
+       features     = 'gtest',
+       source       = 'CombinationTest.cpp',
+       target       = 'combination_test',
+       use          = '',
+       includes     = '.')
+  bld.program(
+       source       = 'CombinationGenerator.cpp',
+       target       = 'CombinationGenerator',
+       use          = '',
+       includes     = '.')

@@ -1,0 +1,38 @@
+def options(ctx):
+  pass
+    
+def configure(ctx):
+  pass
+
+def build(bld):
+  bld.shlib(
+       source       = 'RSDic.cpp RSDicBuilder.cpp EnumCoder.cpp',
+       target       = 'RSDic',
+       name         = 'RSDIC',
+       use          = '',
+       includes     = '.')
+  bld.program(
+       features     = 'gtest',
+       source       = 'UtilTest.cpp',
+       target       = 'util_test',
+       use          = 'RSDIC',
+       includes     = '.')
+  bld.program(
+       features     = 'gtest',
+       source       = 'EnumCoderTest.cpp',
+       target       = 'enum_coder_test',
+       use          = 'RSDIC',
+       includes     = '.')
+  bld.program(
+       features     = 'gtest',
+       source       = 'RSDicBuilderTest.cpp',
+       target       = 'rsdic_builder_test',
+       use          = 'RSDIC',
+       includes     = '.')
+  bld.program(
+       features     = 'gtest',
+       source       = 'RSDicTest.cpp',
+       target       = 'rsdic_test',
+       use          = 'RSDIC',
+       includes     = '.')
+  bld.install_files('${PREFIX}/include/rsdic', bld.path.ant_glob('*.hpp'))
