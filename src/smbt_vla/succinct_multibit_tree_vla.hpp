@@ -221,6 +221,11 @@ struct Tree {
 
 class SuccinctMultibitTreeVLA{
 private:
+  // fvs_ holds raw `new`ed pairs, so the class owns heap memory and must
+  // not be copied (a shallow copy would double-free). Declared, undefined.
+  SuccinctMultibitTreeVLA(const SuccinctMultibitTreeVLA &);
+  SuccinctMultibitTreeVLA &operator=(const SuccinctMultibitTreeVLA &);
+  void     free_fvs();
   void     read_file(std::ifstream &ifs, std::vector<std::pair<uint32_t, std::vector<uint32_t> >* > &fvs);
   void     build_multibit_tree();
   void     build_multibit_tree_recursive(uint32_t depth, std::vector<uint32_t> &ids, std::set<uint32_t> items, std::vector<Component*> &components);
@@ -239,6 +244,7 @@ private:
 
 public:
   SuccinctMultibitTreeVLA() : minsup_(0) {}
+  ~SuccinctMultibitTreeVLA();
   void     build(const char *fname, size_t minsup);
   void     search(const char *qname, float sim);
   void     save(std::ostream &os);

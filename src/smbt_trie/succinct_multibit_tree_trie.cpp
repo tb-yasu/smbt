@@ -282,6 +282,12 @@ void SuccinctMultibitTreeTRIE::unique() {
 	clusters_.resize(id+1);
       for (size_t j = bef; j < i; ++j)
 	clusters_[id].push_back(fvs_[j]->first);
+      // fvs_[bef] is this group's representative and is carried into
+      // newfvs; fvs_[bef+1 .. i-1] are duplicate fingerprints, now folded
+      // into clusters_ (only their id is kept, by value). Free them so
+      // they don't leak once fvs_ is replaced by newfvs below.
+      for (size_t j = bef + 1; j < i; ++j)
+	delete fvs_[j];
       newfvs.push_back(fvs_[bef]);
       bef = i;
     }
@@ -291,6 +297,8 @@ void SuccinctMultibitTreeTRIE::unique() {
     clusters_.resize(id+1);
   for (size_t j = bef; j < size; ++j)
     clusters_[id].push_back(fvs_[j]->first);
+  for (size_t j = bef + 1; j < size; ++j)
+    delete fvs_[j];
   newfvs.push_back(fvs_[bef]);
 
   fvs_ = newfvs;
@@ -416,6 +424,23 @@ void SuccinctMultibitTreeTRIE::compress_items(vector<uint32_t> &titems) {
   items_.build();
 }
 
+// unique() carries fvs_[0] into newfvs twice (a deliberate, byte-compatible
+// quirk that adds one duplicate trie leaf), so fvs_ can hold the same
+// pointer at two indices. Dedup the pointers before deleting to avoid a
+// double free. Called at the end of build() (trie is self-contained after
+// that) and at destruction as a backstop.
+void SuccinctMultibitTreeTRIE::free_fvs() {
+  std::sort(fvs_.begin(), fvs_.end());
+  fvs_.erase(std::unique(fvs_.begin(), fvs_.end()), fvs_.end());
+  for (size_t i = 0; i < fvs_.size(); ++i)
+    delete fvs_[i];
+  fvs_.clear();
+}
+
+SuccinctMultibitTreeTRIE::~SuccinctMultibitTreeTRIE() {
+  free_fvs();
+}
+
 void SuccinctMultibitTreeTRIE::build(const char *fname, size_t minsup) {
   minsup_ = minsup;
   {
@@ -447,6 +472,8 @@ void SuccinctMultibitTreeTRIE::build(const char *fname, size_t minsup) {
   cout << "total building time (sec):" << (btime + ttime) << endl;
   cout << "succinct multibit tree size (byte):" << size_in_bytes() << endl;
   cout << "trie size (byte):" << trie_size_in_bytes() << endl;
+
+  free_fvs();  // the succinct trie is self-contained now; fvs_ is no longer needed
 }
 
 void SuccinctMultibitTreeTRIE::calc_column_info(Tree &tree, uint64_t cur, const vector<uint32_t> &qfv, uint32_t &one_col_num, uint32_t &zero_col_num) {
@@ -635,6 +662,9 @@ void SuccinctMultibitTreeTRIE::search(const char *qname, float sim) {
   cout << "average answers:" << (size > 0 ? double(total_num)/double(size) : 0.0) << endl;
   cout << "average cpu time (sec):" << mean << endl;
   cout << "std dev:" << stddev << endl;
+
+  for (size_t i = 0; i < qfvs.size(); ++i)
+    delete qfvs[i];
 }
 }
 }

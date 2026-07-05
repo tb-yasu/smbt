@@ -257,6 +257,19 @@ void SuccinctMultibitTreeVLA::build_trie() {
   }
 }
 
+// vla encodes each fingerprint into itemset_ (SucArray) during build_trie,
+// so fvs_ is no longer needed once build() finishes. Freed at the end of
+// build() and at destruction as a backstop.
+void SuccinctMultibitTreeVLA::free_fvs() {
+  for (size_t i = 0; i < fvs_.size(); ++i)
+    delete fvs_[i];
+  fvs_.clear();
+}
+
+SuccinctMultibitTreeVLA::~SuccinctMultibitTreeVLA() {
+  free_fvs();
+}
+
 void SuccinctMultibitTreeVLA::build(const char *fname, size_t minsup) {
   minsup_ = minsup;
   {
@@ -288,6 +301,8 @@ void SuccinctMultibitTreeVLA::build(const char *fname, size_t minsup) {
   cout << "total building time (sec):" << (btime + ttime) << endl;
   cout << "succinct multibit tree size (byte):" << size_in_bytes() << endl;
   cout << "trie size (byte):" << trie_size_in_bytes() << endl;
+
+  free_fvs();  // fingerprints are now encoded in itemset_; fvs_ is no longer needed
 }
 
 void SuccinctMultibitTreeVLA::calc_column_info(Tree &tree, uint64_t cur, const vector<uint32_t> &qfv, uint32_t &one_col_num, uint32_t &zero_col_num) {
@@ -427,6 +442,9 @@ void SuccinctMultibitTreeVLA::search(const char *qname, float sim) {
   cout << "average answers:" << (size > 0 ? double(total_num)/double(size) : 0.0) << endl;
   cout << "mean time (sec):" << mean << endl;
   cout << "std dev:" << stddev << endl;
+
+  for (size_t i = 0; i < qfvs.size(); ++i)
+    delete qfvs[i];
 }
 }
 }

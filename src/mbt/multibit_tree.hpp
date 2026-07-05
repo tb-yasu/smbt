@@ -179,6 +179,11 @@ struct Tree {
 
 class MultibitTree {
 private:
+  // fvs_ holds raw `new`ed pairs, so the class owns heap memory and must
+  // not be copied (a shallow copy would double-free). Declared, undefined.
+  MultibitTree(const MultibitTree &);
+  MultibitTree &operator=(const MultibitTree &);
+  void  free_fvs();
   void  read_file(std::ifstream &ifs, std::vector<std::pair<uint64_t, std::vector<uint32_t> >* > &fvs);
   float calc_entropy(uint64_t count_one, uint64_t count_zero);
   void  build_range_multibit_tree(uint64_t num_one, uint64_t start, uint64_t end);
@@ -193,6 +198,7 @@ private:
   float calc_jaccard_sim(const std::vector<uint32_t> &ba1, const std::vector<uint32_t> &ba2);
 public:
   MultibitTree() : minsup_(0), dim_(0) {}
+  ~MultibitTree();
   void  print_memory();
   void  build(const char *fname, uint64_t minsup);
   void  search(const char *qname, float similarity);

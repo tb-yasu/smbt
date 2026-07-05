@@ -174,6 +174,18 @@ void MultibitTree::set_column_info(set<uint64_t> &dims, const vector<uint32_t> &
     dims.erase(delete_items[i]);
 }
 
+// mbt keeps fvs_ as the index body (search reads it, save/load persist it),
+// so it is only released here — at destruction and at the start of load().
+void MultibitTree::free_fvs() {
+  for (size_t i = 0; i < fvs_.size(); ++i)
+    delete fvs_[i];
+  fvs_.clear();
+}
+
+MultibitTree::~MultibitTree() {
+  free_fvs();
+}
+
 void MultibitTree::build(const char *fname, uint64_t minsup) {
   minsup_ = minsup;
   ifstream ifs(fname);
@@ -316,6 +328,9 @@ void MultibitTree::search(const char *qname, float similarity) {
   fprintf(stdout, "var search time (sec):%f\n", var);
   double sum = (size > 0) ? double(totalres)/double(size) : 0.0;
   fprintf(stdout, "result per query:%f\n", sum);
+
+  for (size_t i = 0; i < qfvs.size(); ++i)
+    delete qfvs[i];
 }
 
 void MultibitTree::print_memory() {
@@ -350,6 +365,7 @@ void MultibitTree::save(ostream &os) {
 }
 
 void MultibitTree::load(istream &is)  {
+  free_fvs();  // release any fvs_ from a previous build/load before rebuilding
   checked_read(is, (char*)&minsup_, sizeof(uint64_t));
   checked_read(is, (char*)&dim_, sizeof(uint64_t));
   {
