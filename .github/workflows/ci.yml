@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: build + regression + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 1) Build the CLI and run the shell regression (3-mode agreement, golden,
+      #    shuffled input, build determinism, CLI edge cases, rsdic property test).
+      - name: Build CLI and run regression
+        run: |
+          make
+          test/run_regression.sh
+
+      # 2) Build the extension in place and run the Python test suite (the golden
+      #    test runs here because dat/ and test/ are present in the checkout).
+      - name: Build extension and run pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pybind11 pytest
+          python setup.py build_ext --inplace
+          PYTHONPATH=python python -m pytest tests/ -q
