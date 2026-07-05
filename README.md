@@ -15,9 +15,9 @@ It is a Python binding around the original C++ implementation from
 pip install smbt
 ```
 
-Wheels are provided for macOS (x86_64/arm64) and Linux (x86_64/aarch64) on
-CPython 3.9+. Other platforms build from the source distribution and need a
-C++14 compiler. Windows is not supported yet.
+Wheels are provided for macOS (x86_64/arm64), Linux (x86_64/aarch64), and
+Windows (x86_64) on CPython 3.9-3.13. Other platforms build from the source
+distribution and need a C++14 compiler.
 
 ## Quick start
 

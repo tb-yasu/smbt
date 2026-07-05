@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
 }
 
 void version() {
-  std::cerr << "Succinct Multibit Tree version 0.1.0" << std::endl
+  std::cerr << "Succinct Multibit Tree version 0.2.0" << std::endl
             << "Written by Yasuo Tabei" << std::endl << std::endl;
 }
 
