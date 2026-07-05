@@ -199,6 +199,34 @@ void MultibitTree::build(const char *fname, uint64_t minsup) {
     throw smbt::Error(std::string("error: no fingerprints read from ") + fname + " (empty or all-blank input)");
   }
 
+  build_core();
+}
+
+void MultibitTree::build_from_data(const vector<vector<uint32_t> > &data, uint64_t minsup) {
+  minsup_ = minsup;
+  if (data.empty())
+    throw std::invalid_argument("empty fingerprint set");
+  for (size_t i = 0; i < data.size(); ++i) {
+    vector<uint32_t> fv(data[i]);
+    sort(fv.begin(), fv.end());
+    fv.erase(unique(fv.begin(), fv.end()), fv.end());
+    if (fv.empty()) {
+      ostringstream oss;
+      oss << "fingerprint at index " << i << " is empty";
+      throw std::invalid_argument(oss.str());
+    }
+    fvs_.resize(fvs_.size() + 1);
+    fvs_[fvs_.size() - 1] = new std::pair<uint64_t, std::vector<uint32_t> >();
+    fvs_[fvs_.size() - 1]->first = i;
+    fvs_[fvs_.size() - 1]->second.swap(fv);
+  }
+  build_core();
+}
+
+// Shared build back-end: identical for the file and in-memory entry points,
+// so the same fingerprints (a blank-line-free file vs the equivalent data)
+// produce a byte-identical index.
+void MultibitTree::build_core() {
   double stime = clock();
   if (verbose_) cerr << "sorting" << endl;
   sort(fvs_.begin(), fvs_.end(), CardinalityLess());
@@ -229,6 +257,15 @@ void MultibitTree::search_query(const vector<uint32_t> &qfv, float similarity, v
     if (similarity * float(tree.cardinality) > float(query_one_num))
       break;
   }
+}
+
+void MultibitTree::search_fv(const vector<uint32_t> &fv, float similarity, vector<pair<float, uint64_t> > &res) {
+  vector<uint32_t> qfv(fv);
+  sort(qfv.begin(), qfv.end());
+  qfv.erase(unique(qfv.begin(), qfv.end()), qfv.end());
+  if (qfv.empty())
+    throw std::invalid_argument("empty query fingerprint");
+  search_query(qfv, similarity, res);
 }
 
 void MultibitTree::search_query_recursive(Tree &tree, uint64_t cur, const vector<uint32_t> &qfv, float similarity, uint32_t one_col_num, uint32_t zero_col_num, vector<pair<float, uint64_t> > &res) {

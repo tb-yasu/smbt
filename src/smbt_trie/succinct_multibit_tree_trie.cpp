@@ -455,6 +455,34 @@ void SuccinctMultibitTreeTRIE::build(const char *fname, size_t minsup) {
     throw smbt::Error(std::string("error: no fingerprints read from ") + fname + " (empty or all-blank input)");
   }
 
+  build_core();
+}
+
+void SuccinctMultibitTreeTRIE::build_from_data(const vector<vector<uint32_t> > &data, size_t minsup) {
+  minsup_ = minsup;
+  if (data.empty())
+    throw std::invalid_argument("empty fingerprint set");
+  for (size_t i = 0; i < data.size(); ++i) {
+    vector<uint32_t> fv(data[i]);
+    sort(fv.begin(), fv.end());
+    fv.erase(std::unique(fv.begin(), fv.end()), fv.end());
+    if (fv.empty()) {
+      ostringstream oss;
+      oss << "fingerprint at index " << i << " is empty";
+      throw std::invalid_argument(oss.str());
+    }
+    fvs_.resize(fvs_.size() + 1);
+    fvs_[fvs_.size() - 1] = new pair<uint32_t, vector<uint32_t> >;
+    fvs_[fvs_.size() - 1]->first = i;
+    fvs_[fvs_.size() - 1]->second.swap(fv);
+  }
+  build_core();
+}
+
+// Shared build back-end: identical for the file and in-memory entry points,
+// so the same fingerprints (a blank-line-free file vs the equivalent data)
+// produce a byte-identical index.
+void SuccinctMultibitTreeTRIE::build_core() {
   if (verbose_) cerr << "building multibit tree" << endl;
   double bstime = clock();
   build_multibit_tree();
@@ -614,6 +642,15 @@ void SuccinctMultibitTreeTRIE::search_query(const vector<uint32_t> &qfv, float s
       break;
 
   }
+}
+
+void SuccinctMultibitTreeTRIE::search_fv(const vector<uint32_t> &fv, float similarity, vector<pair<float, uint32_t> > &res) {
+  vector<uint32_t> qfv(fv);
+  sort(qfv.begin(), qfv.end());
+  qfv.erase(std::unique(qfv.begin(), qfv.end()), qfv.end());
+  if (qfv.empty())
+    throw std::invalid_argument("empty query fingerprint");
+  search_query(qfv, similarity, res);
 }
 
 void SuccinctMultibitTreeTRIE::search(const char *qname, float sim) {

@@ -256,6 +256,7 @@ private:
   SuccinctMultibitTreeTRIE(const SuccinctMultibitTreeTRIE &);
   SuccinctMultibitTreeTRIE &operator=(const SuccinctMultibitTreeTRIE &);
   void     free_fvs();
+  void     build_core();
   void     read_file(std::ifstream &ifs, std::vector<std::pair<uint32_t, std::vector<uint32_t> >* > &fvs);
   void     build_multibit_tree();
   void     build_multibit_tree_recursive(uint32_t depth, std::vector<uint32_t> &ids, std::set<uint32_t> items, std::vector<Component*> &components);
@@ -284,7 +285,17 @@ public:
   // so its stdout/stderr are unchanged; the Python binding turns it off.
   void set_verbose(bool v) { verbose_ = v; }
   void build(const char *fname, size_t minsup);
+  // In-memory build: each element of `data` is one fingerprint (a set of
+  // item ids). Unlike the file path, an empty fingerprint is an error
+  // (std::invalid_argument), not a skipped blank line, so result ids equal
+  // the input index. Blank-line-free file input and the equivalent `data`
+  // produce a byte-identical index.
+  void build_from_data(const std::vector<std::vector<uint32_t> > &data, size_t minsup);
   void search(const char *qname, float sim);
+  // Single-query search returning results by value. The query is copied,
+  // sorted and de-duplicated to satisfy search_query's contract; an empty
+  // query is an error (std::invalid_argument).
+  void search_fv(const std::vector<uint32_t> &fv, float similarity, std::vector<std::pair<float, uint32_t> > &res);
   void save(std::ostream &os);
   void load(std::istream &is);
 
