@@ -178,15 +178,13 @@ void MultibitTree::build(const char *fname, uint64_t minsup) {
   minsup_ = minsup;
   ifstream ifs(fname);
   if (!ifs) {
-    cerr << "cannot open: " << fname << endl;
-    exit(1);
+    throw smbt::Error(std::string("cannot open: ") + fname);
   }
 
   cerr << "reading file:" << fname << endl;
   read_file(ifs, fvs_);
   if (fvs_.empty()) {
-    cerr << "error: no fingerprints read from " << fname << " (empty or all-blank input)" << endl;
-    exit(1);
+    throw smbt::Error(std::string("error: no fingerprints read from ") + fname + " (empty or all-blank input)");
   }
 
   double stime = clock();
@@ -277,8 +275,7 @@ void MultibitTree::calc_column_info(Tree &tree, uint64_t cur, const vector<uint3
 void MultibitTree::search(const char *qname, float similarity) {
   ifstream ifs(qname);
   if (!ifs) {
-    cerr << "cannot open: " << qname << endl;
-    exit(1);
+    throw smbt::Error(std::string("cannot open: ") + qname);
   }
   std::vector<std::pair<uint64_t, vector<uint32_t> >* > qfvs;
   read_file(ifs, qfvs);

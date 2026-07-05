@@ -192,8 +192,7 @@ struct Tree {
       one_cols.resize(size);
       for (size_t i = 0; i < size; ++i) {
 	if (one_cols[i].load(is) != 0) {
-	  std::cerr << "error: corrupt or truncated index file" << std::endl;
-	  exit(1);
+	  throw smbt::Error("error: corrupt or truncated index file");
 	}
       }
     }
@@ -203,8 +202,7 @@ struct Tree {
       zero_cols.resize(size);
       for (size_t i = 0; i < size; ++i) {
 	if (zero_cols[i].load(is) != 0) {
-	  std::cerr << "error: corrupt or truncated index file" << std::endl;
-	  exit(1);
+	  throw smbt::Error("error: corrupt or truncated index file");
 	}
       }
     }
@@ -214,8 +212,7 @@ struct Tree {
       ids.resize(size);
       for (size_t i = 0; i < size; ++i) {
 	if (ids[i].load(is) != 0) {
-	  std::cerr << "error: corrupt or truncated index file" << std::endl;
-	  exit(1);
+	  throw smbt::Error("error: corrupt or truncated index file");
 	}
       }
     }

@@ -42,8 +42,9 @@ int main(int argc, char **argv) {
 
   // Validate the mode, and build the index in memory, *before* touching
   // the output file at all: this way neither an invalid -mode nor a
-  // build() failure (e.g. unreadable input, which build() itself already
-  // exit(1)s on) ever leaves a truncated/garbage index file behind.
+  // build() failure (e.g. unreadable input, which build() now throws
+  // smbt::Error on — caught below) ever leaves a truncated/garbage index
+  // file behind.
   if (mode != 1 && mode != 2 && mode != 3) {
     std::cerr << "error : mode should be 1 or 2 or 3." << std::endl;
     return 1;
@@ -54,53 +55,59 @@ int main(int argc, char **argv) {
   // (1/2/3) and reject the latter with a clear error.
   const uint64_t tag = mode + 10;
 
-  if      (mode == 1) {
-    smbt::trie::SuccinctMultibitTreeTRIE mbt;
-    mbt.build(fname, minsup);
-    ofstream ofs(oname, ios::out | ios::binary | ios::trunc);
-    if (!ofs) {
-      cerr << "cannot open: " << oname << endl;
-      exit(1);
+  try {
+    if      (mode == 1) {
+      smbt::trie::SuccinctMultibitTreeTRIE mbt;
+      mbt.build(fname, minsup);
+      ofstream ofs(oname, ios::out | ios::binary | ios::trunc);
+      if (!ofs) {
+        cerr << "cannot open: " << oname << endl;
+        return 1;
+      }
+      ofs.write((const char*)(&tag), sizeof(tag));
+      mbt.save(ofs);
+      ofs.close();
+      if (!ofs) {
+        cerr << "error writing index file: " << oname << endl;
+        return 1;
+      }
     }
-    ofs.write((const char*)(&tag), sizeof(tag));
-    mbt.save(ofs);
-    ofs.close();
-    if (!ofs) {
-      cerr << "error writing index file: " << oname << endl;
-      exit(1);
+    else if (mode == 2) {
+      smbt::vla::SuccinctMultibitTreeVLA mbt;
+      mbt.build(fname, minsup);
+      ofstream ofs(oname, ios::out | ios::binary | ios::trunc);
+      if (!ofs) {
+        cerr << "cannot open: " << oname << endl;
+        return 1;
+      }
+      ofs.write((const char*)(&tag), sizeof(tag));
+      mbt.save(ofs);
+      ofs.close();
+      if (!ofs) {
+        cerr << "error writing index file: " << oname << endl;
+        return 1;
+      }
+    }
+    else {
+      smbt::mbt::MultibitTree mbt;
+      mbt.build(fname, minsup);
+      ofstream ofs(oname, ios::out | ios::binary | ios::trunc);
+      if (!ofs) {
+        cerr << "cannot open: " << oname << endl;
+        return 1;
+      }
+      ofs.write((const char*)(&tag), sizeof(tag));
+      mbt.save(ofs);
+      ofs.close();
+      if (!ofs) {
+        cerr << "error writing index file: " << oname << endl;
+        return 1;
+      }
     }
   }
-  else if (mode == 2) {
-    smbt::vla::SuccinctMultibitTreeVLA mbt;
-    mbt.build(fname, minsup);
-    ofstream ofs(oname, ios::out | ios::binary | ios::trunc);
-    if (!ofs) {
-      cerr << "cannot open: " << oname << endl;
-      exit(1);
-    }
-    ofs.write((const char*)(&tag), sizeof(tag));
-    mbt.save(ofs);
-    ofs.close();
-    if (!ofs) {
-      cerr << "error writing index file: " << oname << endl;
-      exit(1);
-    }
-  }
-  else {
-    smbt::mbt::MultibitTree mbt;
-    mbt.build(fname, minsup);
-    ofstream ofs(oname, ios::out | ios::binary | ios::trunc);
-    if (!ofs) {
-      cerr << "cannot open: " << oname << endl;
-      exit(1);
-    }
-    ofs.write((const char*)(&tag), sizeof(tag));
-    mbt.save(ofs);
-    ofs.close();
-    if (!ofs) {
-      cerr << "error writing index file: " << oname << endl;
-      exit(1);
-    }
+  catch (const std::exception &e) {
+    cerr << e.what() << endl;
+    return 1;
   }
 
   return 0;

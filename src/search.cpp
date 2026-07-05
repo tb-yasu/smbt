@@ -40,45 +40,51 @@ void parse_parameters (int argc, char **argv);
 int main(int argc, char **argv) {
   parse_parameters(argc, argv);
 
-  ifstream ifs(infile, ios::in | ios::binary);
-  if (!ifs) {
-    cerr << "cannot open : " << infile << endl;
-    exit(1);
+  try {
+    ifstream ifs(infile, ios::in | ios::binary);
+    if (!ifs) {
+      cerr << "cannot open : " << infile << endl;
+      return 1;
+    }
+    cerr << "Load:" << infile << endl;
+    ifs.read((char*)(&tag), sizeof(tag));
+    if (!ifs) {
+      cerr << "error: corrupt or truncated index file: " << infile << endl;
+      return 1;
+    }
+    // The leading uint64 is the index format tag: 11/12/13 = format v2
+    // (mode 1/2/3). Old v1 indexes started with the raw mode 1/2/3.
+    if      (tag == 11) {
+      smbt::trie::SuccinctMultibitTreeTRIE mbt;
+      mbt.load(ifs);
+      ifs.close();
+      mbt.search(qfname, similarity);
+    }
+    else if (tag == 12) {
+      smbt::vla::SuccinctMultibitTreeVLA mbt;
+      mbt.load(ifs);
+      ifs.close();
+      mbt.search(qfname, similarity);
+    }
+    else if (tag == 13) {
+      smbt::mbt::MultibitTree mbt;
+      mbt.load(ifs);
+      ifs.close();
+      mbt.search(qfname, similarity);
+    }
+    else if (tag == 1 || tag == 2 || tag == 3) {
+      cerr << "error: " << infile
+           << " is an old index format (v1) — rebuild the index with smbt-build." << endl;
+      return 1;
+    }
+    else {
+      cerr << "error: " << infile
+           << " is not a smbt index file (unknown format tag " << tag << ")." << endl;
+      return 1;
+    }
   }
-  cerr << "Load:" << infile << endl;
-  ifs.read((char*)(&tag), sizeof(tag));
-  if (!ifs) {
-    cerr << "error: corrupt or truncated index file: " << infile << endl;
-    exit(1);
-  }
-  // The leading uint64 is the index format tag: 11/12/13 = format v2
-  // (mode 1/2/3). Old v1 indexes started with the raw mode 1/2/3.
-  if      (tag == 11) {
-    smbt::trie::SuccinctMultibitTreeTRIE mbt;
-    mbt.load(ifs);
-    ifs.close();
-    mbt.search(qfname, similarity);
-  }
-  else if (tag == 12) {
-    smbt::vla::SuccinctMultibitTreeVLA mbt;
-    mbt.load(ifs);
-    ifs.close();
-    mbt.search(qfname, similarity);
-  }
-  else if (tag == 13) {
-    smbt::mbt::MultibitTree mbt;
-    mbt.load(ifs);
-    ifs.close();
-    mbt.search(qfname, similarity);
-  }
-  else if (tag == 1 || tag == 2 || tag == 3) {
-    cerr << "error: " << infile
-         << " is an old index format (v1) — rebuild the index with smbt-build." << endl;
-    return 1;
-  }
-  else {
-    cerr << "error: " << infile
-         << " is not a smbt index file (unknown format tag " << tag << ")." << endl;
+  catch (const std::exception &e) {
+    cerr << e.what() << endl;
     return 1;
   }
   return 0;

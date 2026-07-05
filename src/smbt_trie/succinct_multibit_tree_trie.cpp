@@ -421,15 +421,13 @@ void SuccinctMultibitTreeTRIE::build(const char *fname, size_t minsup) {
   {
     ifstream ifs(fname);
     if (!ifs) {
-      cerr << "cannot open: " << fname << endl;
-      exit(1);
+      throw smbt::Error(std::string("cannot open: ") + fname);
     }
     read_file(ifs, fvs_);
     ifs.close();
   }
   if (fvs_.empty()) {
-    cerr << "error: no fingerprints read from " << fname << " (empty or all-blank input)" << endl;
-    exit(1);
+    throw smbt::Error(std::string("error: no fingerprints read from ") + fname + " (empty or all-blank input)");
   }
 
   cerr << "building multibit tree" << endl;
@@ -595,8 +593,7 @@ void SuccinctMultibitTreeTRIE::search(const char *qname, float sim) {
   {
     ifstream ifs(qname);
     if (!ifs) {
-      cerr << "cannot open: " << qname << endl;
-      exit(1);
+      throw smbt::Error(std::string("cannot open: ") + qname);
     }
     read_file(ifs, qfvs);
     ifs.close();
