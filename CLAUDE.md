@@ -62,11 +62,26 @@ index ファイルは先頭 uint64 のフォーマットタグ(v2: `mode + 10` =
 
 クラス PascalCase、関数・変数 snake_case、class の private メンバは末尾 `_`(struct の public データは `_` なし)、定数 kPascalCase(`kBlockSize`)、namespace は `smbt` / `smbt::{mbt,vla,trie}`、ファイル・ディレクトリ名 snake_case、include guard は `SMBT_..._HPP_`。**例外**: rsdic 呼び出し部(`Rank`/`Select`/`PushBack` 等)は先方の流儀のままで、境界の混在は意図的。新規コードもこの規約に従うこと。
 
+## Python バインディング / PyPI パッケージ(2026-07 追加)
+
+CLI に加えて Python パッケージ `smbt` を提供する。C++ 本体は無改変で共有し、pybind11 で薄くラップする。
+
+- `bindings/smbt_core.cpp` — 単一の `smbt._core.Index` が 3 実装をラップ(mode 1/2/3)。フォーマットタグ(mode+10)は save/load 内で処理(build.cpp/search.cpp を再現)。`smbt::Error`→`smbt.Error`、`std::invalid_argument`→`ValueError`。build/search/save/load で GIL 解放(search は read-only なので並行呼び出し可)。結果は `[(id, sim)]` を sim 降順・id 昇順で返す。
+- `python/smbt/__init__.py` — `Index`/`Error` の re-export + `build`/`build_file`/`load` 便宜関数 + `__version__`。
+- `setup.py` + `pyproject.toml` — `Pybind11Extension`(src の 9 本 + binding、`-DNDEBUG` 必須、`cxx_std=14`)。バージョンは pyproject 単一ソース(現行 0.1.0)。
+- `tests/`(pytest、shell 回帰の `test/` とは別)— 3 モード一致・オラクル・in-memory/ファイル byte 一致・save/load 往復・golden 一致・エラーパス・verbose。
+- ビルド: `python setup.py build_ext --inplace` → `PYTHONPATH=python python -m pytest tests/`。配布は cibuildwheel(`.github/workflows/wheels.yml`)。
+- C++ 側に追加した API: 各実装に `build_from_data(vector<vector<uint32_t>>, minsup)`(in-memory 入口、空 fingerprint は `invalid_argument`)、`search_fv(fv, sim, res)`(sort+unique して private `search_query` を呼ぶ公開ラッパ)、`set_verbose(bool)`(build 出力を抑制、CLI は default true で出力不変)。同一データならファイル経由と in-memory で index は byte 一致。
+
+## C++ 変更時の不変量(重要)
+
+**C++ 本体(mbt/vla/trie の .cpp/.hpp、build.cpp、search.cpp、lib)を変更したら、必ず `make clean && make` → `test/run_regression.sh --byte-gate ~/Prog/10_cpp/smbt-bytegate-v2`(33/33)を通す**。byte-gate baseline はコード変更前の実バイナリで生成済み。Python 層の変更のみなら pytest で足りるが、binding が参照する C++ シグネチャを変えたら両方回す。
+
 ## 既知の残存問題(2026-07 の修正後)
 
-2026-07 に重大バグ(mode 2 の未ソート入力で誤結果、CLI の segfault・暴走、未初期化 `dim` による index 非決定、死んでいたエントロピー early-break 等)を修正し、続く API 整理パスで使い方の問題(疎な `vector<VarByte>` 索引、VarByte の vptr、builder のメンバ同居、similarity のメンバ渡し、const 欠如、幽霊宣言・死コードの大半)を解消、さらに命名規約パスで全識別子・ファイル名・ディレクトリ名を上記規約に統一済み(死ファイル bit_array.*・SucSet.hpp も削除)。検索結果の互換性は golden との一致で担保されている。残存する既知の問題:
+2026-07 に重大バグ(mode 2 の未ソート入力で誤結果、CLI の segfault・暴走、未初期化 `dim` による index 非決定、死んでいたエントロピー early-break 等)を修正し、続く API 整理パス・命名規約パス・リーク解消 + Python バインディングパスを経ている。検索結果の互換性は golden との一致で担保。残存する既知の問題:
 
-- fingerprint は `new` した pair のまま解放されない(ワンショット CLI 前提のリーク。TRIE の `unique()` が捨てる重複分も孤児になる)。
-- index フォーマットはタグ以外は `size_t` を含む生バイナリダンプのまま(64bit・同一エンディアン前提)。v1 index(2026-07 の API 整理パス以前に構築したもの)は現行バイナリでは読めない(明示エラー)。読む必要があれば下記バックアップの baseline_bin を使う。
+- index フォーマットはタグ以外は `size_t` を含む生バイナリダンプのまま(64bit・同一エンディアン前提)。v1 index(2026-07 の API 整理パス以前に構築したもの)は現行バイナリ・Python の両方で読めない(明示エラー)。読む必要があれば下記バックアップの baseline_bin を使う。
 - rsdic は `rsdic_uint = uint32_t` のためビット長 2^32 以上で silent wrap。
-- 修正前スナップショットは `~/Prog/10_cpp/smbt-0.0.1-backup-20260704/`(全体 tar・修正前バイナリ・修正前 v1 index)。リポジトリは git 管理していない(ユーザーの選択)。
+- item id は密な次元として扱われるため、巨大 id(例 2^31)はメモリを圧迫する(README にも明記)。
+- 修正前スナップショットは `~/Prog/10_cpp/smbt-0.0.1-backup-20260704/`(全体 tar・修正前バイナリ・修正前 v1 index)、rsdic の元 .git は同ディレクトリの `rsdic-dot-git`。**2026-07 にリポジトリを git 化した**(GitHub `tb-yasu/smbt` 公開予定)。fingerprint リークは解消済み(デストラクタ + `free_fvs` + TRIE `unique()` の孤児削除)。

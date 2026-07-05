@@ -1,0 +1,19 @@
+# Files needed to build and test the extension from an sdist.
+include LICENSE README.md pyproject.toml setup.py
+
+# C++ sources and headers (the extension compiles a fixed subset; ship all so
+# transitive includes resolve). The vendored rsdic lives under src/rsdic/.
+recursive-include src *.hpp *.cpp *.h
+recursive-include bindings *.cpp
+
+# Python package and test suite.
+graft python
+graft tests
+
+# Large sample data and the shell regression harness are kept in git only;
+# the golden pytest skips gracefully when they are absent.
+prune dat
+prune test
+prune prog
+
+global-exclude *.o *.so *~ __pycache__/* *.pyc
