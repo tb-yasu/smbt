@@ -29,6 +29,6 @@ jobs:
       - name: Build extension and run pytest
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pybind11 pytest
+          python -m pip install pybind11 pytest setuptools wheel
           python setup.py build_ext --inplace
           PYTHONPATH=python python -m pytest tests/ -q
