@@ -22,6 +22,7 @@ jobs:
           - ubuntu-24.04-arm   # Linux aarch64 (native ARM runner)
           - macos-15-intel     # macOS x86_64 (Intel; available until Aug 2027)
           - macos-latest       # macOS arm64 (Apple Silicon)
+          - windows-latest     # Windows x86_64 (win_amd64; 32-bit skipped via *-win32)
     steps:
       - uses: actions/checkout@v4
 
