@@ -95,6 +95,8 @@ are skipped).
 
 ## Constraints
 
+- **64-bit only.** Wheels are built for 64-bit platforms (x86_64, arm64); 32-bit
+  is not supported (the format and the algorithm assume a 64-bit `size_t`).
 - **Index files are not portable across architectures.** They are a raw binary
   dump assuming 64-bit, same-endianness, same `size_t` width. Build and read an
   index on the same kind of machine (x86_64 and arm64 are both little-endian, so

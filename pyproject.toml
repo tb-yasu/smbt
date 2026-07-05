@@ -41,7 +41,9 @@ packages = ["smbt"]
 
 [tool.cibuildwheel]
 build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
-skip = "*-musllinux*"
+# 64-bit only: the index format assumes a 64-bit size_t, and the three modes
+# only agree on 64-bit builds. Skip 32-bit (i686/win32) and musllinux.
+skip = "*-musllinux* *_i686 *-win32"
 test-requires = "pytest"
 test-command = "python -m pytest {project}/tests -q"
 build-verbosity = 1
