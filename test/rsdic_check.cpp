@@ -85,8 +85,12 @@ static void checkOne(const vector<bool> &bits, const char *label) {
     CHECK(rs.Rank(i, 0) == i - rank1, "Rank(i,0) matches naive prefix count", label);
     if (bits[i]) ++rank1;
   }
-  CHECK(rs.Rank(len, 1) == rank1, "Rank(len,1) == total ones", label);
-  CHECK(rs.Rank(len, 0) == len - rank1, "Rank(len,0) == total zeros", label);
+  // rsdic's Rank(pos) is only defined for pos in [0, num()): pos == num()
+  // reads rank_small_blocks_[num()/64], one past the end, when num() is a
+  // multiple of 64 (benign on some platforms, a segfault on others). The
+  // "rank over the whole vector == total ones" invariant is already covered
+  // by one_num() above, so we do not call Rank(len) here.
+  CHECK(rank1 == ones, "prefix ranks accumulate to total ones", label);
 
   {
     uint64_t seen = 0;
