@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61", "pybind11>=2.10"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smbt"
+version = "0.1.0"
+description = "Succinct Multibit Tree: fast Jaccard/Tanimoto similarity search over chemical fingerprints"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Yasuo Tabei", email = "yasuo.tabei@gmail.com" }]
+keywords = [
+    "cheminformatics",
+    "fingerprint",
+    "similarity-search",
+    "tanimoto",
+    "jaccard",
+    "succinct-data-structure",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Homepage = "https://github.com/tb-yasu/smbt"
+Repository = "https://github.com/tb-yasu/smbt"
+"Paper (WABI 2012)" = "https://doi.org/10.1007/978-3-642-33122-0_16"
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+packages = ["smbt"]
+
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
+skip = "*-musllinux*"
+test-requires = "pytest"
+test-command = "python -m pytest {project}/tests -q"
+build-verbosity = 1
