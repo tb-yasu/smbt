@@ -197,8 +197,11 @@ private:
   void  calc_similarity(Tree &tree, uint64_t cur, const std::vector<uint32_t> &qfv, float similarity, std::vector<std::pair<float, uint64_t> > &res);
   float calc_jaccard_sim(const std::vector<uint32_t> &ba1, const std::vector<uint32_t> &ba2);
 public:
-  MultibitTree() : minsup_(0), dim_(0) {}
+  MultibitTree() : minsup_(0), dim_(0), verbose_(true) {}
   ~MultibitTree();
+  // Progress/statistics printing during build(). Left on (true) for the CLI
+  // so its stdout/stderr are unchanged; the Python binding turns it off.
+  void  set_verbose(bool v) { verbose_ = v; }
   void  print_memory();
   void  build(const char *fname, uint64_t minsup);
   void  search(const char *qname, float similarity);
@@ -218,6 +221,7 @@ private:
   std::vector<std::pair<uint64_t, std::vector<uint32_t> >* > fvs_;
   std::vector<Tree>                                          trees_;
   uint64_t                                                   dim_;
+  bool                                                       verbose_;
 };
 
 }  // namespace mbt

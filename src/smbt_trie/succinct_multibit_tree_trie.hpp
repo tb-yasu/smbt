@@ -278,8 +278,11 @@ private:
   void     compress_items(std::vector<uint32_t> &titems);
   void     unique();
 public:
-  SuccinctMultibitTreeTRIE() : minsup_(0) {}
+  SuccinctMultibitTreeTRIE() : minsup_(0), verbose_(true) {}
   ~SuccinctMultibitTreeTRIE();
+  // Progress/statistics printing during build(). Left on (true) for the CLI
+  // so its stdout/stderr are unchanged; the Python binding turns it off.
+  void set_verbose(bool v) { verbose_ = v; }
   void build(const char *fname, size_t minsup);
   void search(const char *qname, float sim);
   void save(std::ostream &os);
@@ -311,6 +314,7 @@ private:
   smbt::SucArray               idconverter_;
   std::vector<smbt::SucArray>  remains_;
   std::vector<std::vector<uint32_t> > clusters_;
+  bool                         verbose_;
 };
 
 }  // namespace trie

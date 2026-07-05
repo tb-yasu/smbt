@@ -193,27 +193,29 @@ void MultibitTree::build(const char *fname, uint64_t minsup) {
     throw smbt::Error(std::string("cannot open: ") + fname);
   }
 
-  cerr << "reading file:" << fname << endl;
+  if (verbose_) cerr << "reading file:" << fname << endl;
   read_file(ifs, fvs_);
   if (fvs_.empty()) {
     throw smbt::Error(std::string("error: no fingerprints read from ") + fname + " (empty or all-blank input)");
   }
 
   double stime = clock();
-  cerr << "sorting" << endl;
+  if (verbose_) cerr << "sorting" << endl;
   sort(fvs_.begin(), fvs_.end(), CardinalityLess());
 
-  cerr << "build multibit tree" << endl;
+  if (verbose_) cerr << "build multibit tree" << endl;
   build_multibit_tree(fvs_);
   double etime = clock();
-  fprintf(stdout, "construction time (sec):%f\n", (etime - stime)/CLOCKS_PER_SEC);
-  print_memory();
-  double memory = 0.f;
-  for (size_t i = 0; i < fvs_.size(); ++i) {
-    memory += 32.f/8.f;
-    memory += (fvs_[i]->second.size() * 32)/8.f;
+  if (verbose_) {
+    fprintf(stdout, "construction time (sec):%f\n", (etime - stime)/CLOCKS_PER_SEC);
+    print_memory();
+    double memory = 0.f;
+    for (size_t i = 0; i < fvs_.size(); ++i) {
+      memory += 32.f/8.f;
+      memory += (fvs_[i]->second.size() * 32)/8.f;
+    }
+    fprintf(stdout, "input data size (byte):%f\n", memory);
   }
-  fprintf(stdout, "input data size (byte):%f\n", memory);
 }
 
 void MultibitTree::search_query(const vector<uint32_t> &qfv, float similarity, vector<pair<float, uint64_t> > &res) {

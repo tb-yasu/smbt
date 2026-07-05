@@ -243,8 +243,11 @@ private:
   float    jaccard_sim(uint32_t id, const std::vector<uint32_t> &qfv);
 
 public:
-  SuccinctMultibitTreeVLA() : minsup_(0) {}
+  SuccinctMultibitTreeVLA() : minsup_(0), verbose_(true) {}
   ~SuccinctMultibitTreeVLA();
+  // Progress/statistics printing during build(). Left on (true) for the CLI
+  // so its stdout/stderr are unchanged; the Python binding turns it off.
+  void     set_verbose(bool v) { verbose_ = v; }
   void     build(const char *fname, size_t minsup);
   void     search(const char *qname, float sim);
   void     save(std::ostream &os);
@@ -269,6 +272,7 @@ private:
   size_t minsup_;
   std::vector<Tree> trees_;
   std::vector<std::pair<uint32_t, smbt::SucArray> > itemset_;
+  bool verbose_;
 };
 
 }  // namespace vla

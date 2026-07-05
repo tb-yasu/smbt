@@ -284,23 +284,25 @@ void SuccinctMultibitTreeVLA::build(const char *fname, size_t minsup) {
     throw smbt::Error(std::string("error: no fingerprints read from ") + fname + " (empty or all-blank input)");
   }
 
-  cerr << "building multibit tree" << endl;
+  if (verbose_) cerr << "building multibit tree" << endl;
   double bstime = clock();
   build_multibit_tree();
   double betime = clock();
 
-  cerr << "building trie"  << endl;
+  if (verbose_) cerr << "building trie"  << endl;
   double tstime = clock();
   build_trie();
   double tetime = clock();
 
   double btime = (betime - bstime)/CLOCKS_PER_SEC;
   double ttime = (tetime - tstime)/CLOCKS_PER_SEC;
-  cout << "building time of multibittree (sec):" << btime << endl;
-  cout << "building time of trie (sec):" << ttime << endl;
-  cout << "total building time (sec):" << (btime + ttime) << endl;
-  cout << "succinct multibit tree size (byte):" << size_in_bytes() << endl;
-  cout << "trie size (byte):" << trie_size_in_bytes() << endl;
+  if (verbose_) {
+    cout << "building time of multibittree (sec):" << btime << endl;
+    cout << "building time of trie (sec):" << ttime << endl;
+    cout << "total building time (sec):" << (btime + ttime) << endl;
+    cout << "succinct multibit tree size (byte):" << size_in_bytes() << endl;
+    cout << "trie size (byte):" << trie_size_in_bytes() << endl;
+  }
 
   free_fvs();  // fingerprints are now encoded in itemset_; fvs_ is no longer needed
 }
